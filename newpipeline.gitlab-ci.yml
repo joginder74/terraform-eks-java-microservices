@@ -1,0 +1,26 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  MAVEN_CLI_OPTS: "-B -Dmaven.test.failure.ignore=true"
+
+build:
+  stage: build
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - mvn $MAVEN_CLI_OPTS clean compile
+
+test:
+  stage: test
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - mvn $MAVEN_CLI_OPTS test
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploy step (e.g., Helm, kubectl, Terraform)"
+  only:
+    - main
