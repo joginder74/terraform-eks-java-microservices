@@ -1,0 +1,126 @@
+stages:
+  - Inventry_build
+  - order_build
+  - payment_build
+  - product_build
+  - user_build
+  - dockerize
+  - deploy
+
+variables:
+  MAVEN_CLI_OPTS: "-B -Dmaven.test.failure.ignore=true"
+  DOCKER_DRIVER: overlay2
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA  
+
+Inventry_build:
+  stage: Inventry_build
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - cd code/inventory-service
+    - mvn $MAVEN_CLI_OPTS clean package -DskipTests
+  artifacts:
+    paths:
+      - code/inventory-service/target/*.jar
+
+order_build:
+  stage: order_build
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - cd code/order-service
+    - mvn $MAVEN_CLI_OPTS clean package -DskipTests
+  artifacts:
+    paths:
+      - code/order-service/target/*.jar
+
+payment_build:
+  stage: payment_build
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - cd code/payment-service
+    - mvn $MAVEN_CLI_OPTS clean package -DskipTests
+  artifacts:
+    paths:
+      - code/payment-service/target/*.jar
+
+product_build:
+  stage: product_build
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - cd code/product-service
+    - mvn $MAVEN_CLI_OPTS clean package -DskipTests
+  artifacts:
+    paths:
+      - code/product-service/target/*.jar
+
+user_build:
+  stage: user_build
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - cd code/user-service
+    - mvn $MAVEN_CLI_OPTS clean package -DskipTests
+  artifacts:
+    paths:
+      - code/user-service/target/*.jar
+# upload to AWS ecr of docker image
+dockerize:
+  stage: dockerize
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - apk add --no-cache bash curl python3 py3-pip
+    - apk add --no-cache aws-cli
+    - aws --version
+    - |
+      bash -c '
+      for service in INVENTRY ORDER PAYMENT PRODUCT USER; do
+        REPO_URI_VAR="ECR_REPO_URI_${service}"
+        REPO_URI=${!REPO_URI_VAR}
+        echo "🔐 Logging in to ECR: $REPO_URI"
+        aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REPO_URI
+      done
+      '
+  script:
+    - |
+      bash -c ' 
+      for service in inventry order payment product user; do
+        echo "📦 Dockerizing $service-service"
+        REPO_URI_VAR="ECR_REPO_URI_${service^^}"
+        REPO_URI=${!REPO_URI_VAR}
+        cd code/${service}-service
+        docker build -t $REPO_URI:$IMAGE_TAG .
+        docker push $REPO_URI:$IMAGE_TAG
+        cd -
+      done
+      '
+  only:
+    - main
+deploy:
+  stage: deploy
+  image: amazonlinux:2
+  before_script:
+    - yum install -y unzip curl tar gzip git
+    - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+    - unzip awscliv2.zip && ./aws/install
+    - curl -LO "https://get.helm.sh/helm-v3.13.3-linux-amd64.tar.gz"
+    - tar -zxvf helm-v3.13.3-linux-amd64.tar.gz && mv linux-amd64/helm /usr/local/bin/
+    - curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    - yum install -y yum-utils && yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+    - yum -y install terraform
+    - aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name your-eks-cluster-name
+  script:
+    - echo "⚙️ Deploying using Terraform and Helm"
+    - terraform init
+    - terraform apply -auto-approve
+    - |
+      for service in inventory order payment product user; do
+        REPO_URI_VAR="ECR_REPO_URI_${service^^}"
+        REPO_URI=${!REPO_URI_VAR}
+        helm upgrade --install ${service}-release ./helm-chart \
+          --set image.repository=$REPO_URI \
+          --set image.tag=$IMAGE_TAG
+      done
+  only:
+    - main
