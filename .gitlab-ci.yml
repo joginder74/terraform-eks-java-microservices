@@ -1,16 +1,33 @@
 stages:
+  - Infradeployment
   - Inventry_build
   - order_build
   - payment_build
   - product_build
   - user_build
   - dockerize
-  - deploy
+  - deploy_microservices
 
 variables:
   MAVEN_CLI_OPTS: "-B -Dmaven.test.failure.ignore=true"
   DOCKER_DRIVER: overlay2
   IMAGE_TAG: $CI_COMMIT_SHORT_SHA  
+
+Infradeployment:
+  stage: Infradeployment
+  image: amazonlinux:2
+  before_script:
+    - yum install -y unzip curl git
+    - curl -O https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip
+    - unzip terraform_1.6.0_linux_amd64.zip
+    - mv terraform /usr/local/bin/
+    - terraform -version
+  script:
+    - cd infrastructure/code/eks-cluster
+    - terraform init
+    - terraform apply -auto-approve
+  only:
+    - main 
 
 Inventry_build:
   stage: Inventry_build
@@ -97,8 +114,8 @@ dockerize:
       '
   only:
     - main
-deploy:
-  stage: deploy
+deploy_microservices:
+  stage: deploy_microservices
   image: amazonlinux:2
   before_script:
     - yum install -y unzip curl tar gzip git
@@ -118,7 +135,7 @@ deploy:
       for service in inventory order payment product user; do
         REPO_URI_VAR="ECR_REPO_URI_${service^^}"
         REPO_URI=${!REPO_URI_VAR}
-        helm upgrade --install ${service}-release ./helm-chart \
+        helm upgrade --install ${service}-release ./deployment/HELM \
           --set image.repository=$REPO_URI \
           --set image.tag=$IMAGE_TAG
       done
