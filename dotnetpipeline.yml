@@ -47,5 +47,27 @@ stages:
         inputs:
           PathtoPublish: '$(Build.ArtifactStagingDirectory)'
           ArtifactName: 'drop'
-      
-      
+  - stage: Deploy
+    displayName: 'Deploying'
+    dependsOn: Build
+    jobs:
+    - deployment: DeplyWeb
+      environment: 'production'
+      pool:
+       vmImage: 'windows-latest'
+      strategy:
+        runOnce:
+          deploy:
+              steps:
+              - download: current
+                artifact: drop
+              - task: AzureWebApp@1
+                inputs:
+                  azureSubscription: 'azure-sp-pipeline'
+                  appType: 'webApp'
+                  appName: 'jogiweb'
+                  package: '$(Pipeline.Workspace)/drop'
+                  deploymentMethod: 'auto'
+              
+                         
+         
