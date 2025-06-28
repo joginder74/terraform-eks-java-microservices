@@ -58,16 +58,16 @@ stages:
       strategy:
         runOnce:
           deploy:
-              steps:
-              - download: current
-                artifact: drop
-              - task: AzureWebApp@1
-                inputs:
-                  azureSubscription: 'azure-sp-pipeline'
-                  appType: 'webApp'
-                  appName: 'jogiweb'
-                  package: '$(Pipeline.Workspace)/drop'
-                  deploymentMethod: 'auto'
+            steps:
+            - download: current
+              artifact: drop
+            - task: AzureWebApp@1
+              inputs:
+                azureSubscription: 'azure-sp-pipeline'
+                appType: 'webApp'
+                appName: 'jogiweb'
+                package: '$(Pipeline.Workspace)/drop'
+                deploymentMethod: 'auto'
               
                          
          
