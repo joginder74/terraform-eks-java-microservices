@@ -68,6 +68,20 @@ stages:
                 appName: 'jogiweb'
                 package: '$(Pipeline.Workspace)/drop'
                 deploymentMethod: 'auto'
+  - stage: SQLSQLfile
+    displayName: "test"
+    dependsOn: Deploy
+    condition: succeeded()
+    jobs:
+    - job: Runsql
+      pool:
+        vmImage: 'windows-latest' 
+      steps:
+      - task: SqlAzureDacpacDeployment@1
+        inputs:
+          azureSubscription: $(sesqlServerNamer)
+          DatabaseName: 
+          SqlUsername: 
+          SqlPassword: 
+          
               
-                         
-         
