@@ -83,5 +83,7 @@ stages:
           DatabaseName: 
           SqlUsername: 
           SqlPassword: 
+          deployType: 'sqlTask'
+          SqlFile: 'sql-script/postdeploy.sql'
           
               
